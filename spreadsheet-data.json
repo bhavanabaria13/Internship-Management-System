@@ -1,0 +1,26 @@
+
+[
+  {
+    "timestamp": "12/15/2024 10:30:45",
+    "fullName": "John Doe",
+    "email": "john.doe@example.com",
+    "program": "Computer Science",
+    "phone": "1234567890",
+    "city": "New York",
+    "weekNumber": 1,
+    "reportingPeriod": "Dec 15 - Dec 19, 2024",
+    "learningTopics": "React, TypeScript, Node.js",
+    "tasksCompleted": "Built user authentication system",
+    "workOutput": "Auth API with JWT tokens",
+    "githubLink": "https://github.com/johndoe/auth-system",
+    "deployedUrl": "https://auth-demo.example.com",
+    "completionStatus": "Completed",
+    "selfRating": 4,
+    "timeSpent": "20 hours",
+    "challenges": "CORS issues with API",
+    "solutions": "Configured proper headers and middleware",
+    "keyLearnings": "Learned about JWT security best practices",
+    "performanceScore": 85,
+    "mentorFeedback": "Good work on authentication"
+  }
+]
