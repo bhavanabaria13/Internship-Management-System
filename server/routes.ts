@@ -13,7 +13,9 @@ import fs from "fs";
 import ExcelJS from "exceljs";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { weeklyUpdateSchema } from "../shared/schema";
+import { weeklyUpdateSchema, trainingWeeks, trainingTopics, trainingSubtopics, internTrainingProgress, internCertificates } from "../shared/schema";
+import { db } from "./db";
+import { eq, and, inArray } from "drizzle-orm";
 
 const adminLoginSchema = z.object({
   username: z.string(),
@@ -1675,6 +1677,223 @@ app.patch("/api/exams/:id/disable", requireAdmin, async (req, res) => {
   } catch (error) {
     console.error("UNPUBLISH EXAM ERROR:", error);
     res.status(500).json({ message: "Failed to unpublish exam" });
+  }
+});
+
+/* ================= TRAINING MODULE ROUTES ================= */
+
+/* Get all training weeks */
+app.get("/api/training/weeks", requireAuth, async (req, res) => {
+  try {
+    const weeks = await db.select().from(trainingWeeks).orderBy(trainingWeeks.weekNumber);
+    res.json(weeks);
+  } catch (error) {
+    console.error("GET WEEKS ERROR:", error);
+    res.status(500).json({ message: "Failed to fetch weeks" });
+  }
+});
+
+/* Get topics for a specific week */
+app.get("/api/training/weeks/:weekId/topics", requireAuth, async (req, res) => {
+  try {
+    const topics = await db
+      .select()
+      .from(trainingTopics)
+      .where(eq(trainingTopics.weekId, req.params.weekId))
+      .orderBy(trainingTopics.id);
+    res.json(topics);
+  } catch (error) {
+    console.error("GET TOPICS ERROR:", error);
+    res.status(500).json({ message: "Failed to fetch topics" });
+  }
+});
+
+/* Get subtopics for a specific topic */
+app.get("/api/training/topics/:topicId/subtopics", requireAuth, async (req, res) => {
+  try {
+    const subtopics = await db
+      .select()
+      .from(trainingSubtopics)
+      .where(eq(trainingSubtopics.topicId, req.params.topicId))
+      .orderBy(trainingSubtopics.id);
+    res.json(subtopics);
+  } catch (error) {
+    console.error("GET SUBTOPICS ERROR:", error);
+    res.status(500).json({ message: "Failed to fetch subtopics" });
+  }
+});
+
+/* Get intern's training progress */
+app.get("/api/training/progress/:internId", requireAuth, async (req, res) => {
+  try {
+    const progress = await db
+      .select()
+      .from(internTrainingProgress)
+      .where(eq(internTrainingProgress.internId, req.params.internId));
+    res.json(progress);
+  } catch (error) {
+    console.error("GET PROGRESS ERROR:", error);
+    res.status(500).json({ message: "Failed to fetch progress" });
+  }
+});
+
+/* Submit progress for a week */
+app.post("/api/training/progress/submit", requireAuth, async (req, res) => {
+  try {
+    const { internId, weekId, subtopicIds } = req.body;
+
+    if (!internId || !weekId || !subtopicIds || subtopicIds.length === 0) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // Delete existing progress for this week
+    await db
+      .delete(internTrainingProgress)
+      .where(
+        and(
+          eq(internTrainingProgress.internId, internId),
+          eq(internTrainingProgress.weekId, weekId)
+        )
+      );
+
+    // Insert new progress records
+    const progressRecords = subtopicIds.map((subtopicId: string) => ({
+      internId,
+      weekId,
+      subtopicId,
+      isCompleted: true,
+      completedAt: new Date(),
+    }));
+
+    await db.insert(internTrainingProgress).values(progressRecords);
+
+    res.json({ message: "Progress submitted successfully" });
+  } catch (error) {
+    console.error("SUBMIT PROGRESS ERROR:", error);
+    res.status(500).json({ message: "Failed to submit progress" });
+  }
+});
+
+/* Get final submission status (all 4 weeks completed) */
+app.get("/api/training/check-completion/:internId", requireAuth, async (req, res) => {
+  try {
+    const internId = req.params.internId;
+
+    // Get all weeks
+    const allWeeks = await db.select().from(trainingWeeks);
+
+    // For each week, check if all subtopics are completed
+    const completionStatus = await Promise.all(
+      allWeeks.map(async (week) => {
+        // Get all subtopics for this week
+        const subtopics = await db
+          .select()
+          .from(trainingSubtopics)
+          .innerJoin(trainingTopics, eq(trainingSubtopics.topicId, trainingTopics.id))
+          .where(eq(trainingTopics.weekId, week.id));
+
+        const subtopicIds = subtopics.map((s) => s.training_subtopics.id);
+
+        if (subtopicIds.length === 0) {
+          return { weekId: week.id, weekNumber: week.weekNumber, isCompleted: false };
+        }
+
+        // Check if all subtopics are completed for this intern
+        const completedCount = await db
+          .select()
+          .from(internTrainingProgress)
+          .where(
+            and(
+              eq(internTrainingProgress.internId, internId),
+              eq(internTrainingProgress.weekId, week.id),
+              inArray(internTrainingProgress.subtopicId, subtopicIds),
+              eq(internTrainingProgress.isCompleted, true)
+            )
+          );
+
+        return {
+          weekId: week.id,
+          weekNumber: week.weekNumber,
+          isCompleted: completedCount.length === subtopicIds.length,
+        };
+      })
+    );
+
+    const allWeeksCompleted = completionStatus.every((w) => w.isCompleted);
+
+    res.json({
+      completionStatus,
+      allWeeksCompleted,
+    });
+  } catch (error) {
+    console.error("CHECK COMPLETION ERROR:", error);
+    res.status(500).json({ message: "Failed to check completion" });
+  }
+});
+
+/* Final submission - Generate certificate */
+app.post("/api/training/final-submit", requireAuth, async (req, res) => {
+  try {
+    const { internId } = req.body;
+
+    if (!internId) {
+      return res.status(400).json({ message: "Missing internId" });
+    }
+
+    // Check if certificate already exists
+    const existingCert = await db
+      .select()
+      .from(internCertificates)
+      .where(eq(internCertificates.internId, internId))
+      .limit(1);
+
+    if (existingCert.length > 0) {
+      return res.status(400).json({ message: "Certificate already generated" });
+    }
+
+    // Generate certificate number (format: CERT-YYYYMMDD-XXXXX)
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const randomStr = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const certificateNumber = `CERT-${dateStr}-${randomStr}`;
+
+    // Create certificate record
+    const certificate = await db
+      .insert(internCertificates)
+      .values({
+        internId,
+        certificateNumber,
+        issuedDate: new Date(),
+      })
+      .returning();
+
+    res.json({
+      message: "Certificate generated successfully",
+      certificate: certificate[0],
+    });
+  } catch (error) {
+    console.error("FINAL SUBMIT ERROR:", error);
+    res.status(500).json({ message: "Failed to generate certificate" });
+  }
+});
+
+/* Get certificate for an intern */
+app.get("/api/training/certificate/:internId", requireAuth, async (req, res) => {
+  try {
+    const certificate = await db
+      .select()
+      .from(internCertificates)
+      .where(eq(internCertificates.internId, req.params.internId))
+      .limit(1);
+
+    if (certificate.length === 0) {
+      return res.status(404).json({ message: "Certificate not found" });
+    }
+
+    res.json(certificate[0]);
+  } catch (error) {
+    console.error("GET CERTIFICATE ERROR:", error);
+    res.status(500).json({ message: "Failed to fetch certificate" });
   }
 });
 

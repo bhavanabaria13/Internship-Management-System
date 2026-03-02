@@ -21,6 +21,8 @@ import InternWeeklyUpdatesModule from "./InternWeeklyUpdatesModule";
 import InternDashboardOverview from "./InternDashboardOverview";
 import type { Task, Project } from "@shared/schema";
 import InternTimeLogsModule from "./InternTimeLogsModule";
+import TrainingModule from "../training/TrainingModule";
+import { BookOpen } from "lucide-react";
 
 export default function InternDashboard() {
   const [location, setLocation] = useLocation();
@@ -74,6 +76,7 @@ export default function InternDashboard() {
     if (location.includes("/intern/tasks")) return "tasks";
     if (location.includes("/intern/projects")) return "projects";
     if (location.includes("/intern/profile")) return "profile";
+    if (location.includes("/intern/training")) return "training";
     if (location.includes("/intern/weekly-updates")) return "weekly-updates";
 	 if (location.includes("/intern/time-logs")) return "time-logs";
     return "dashboard";
@@ -91,6 +94,8 @@ export default function InternDashboard() {
         return <InternProjectsModule projects={projects} />;
       case "profile":
         return <InternProfileModule profile={profile} />;
+      case "training":
+        return profile ? <TrainingModule internId={profile.id} internName={profile.name} /> : null;
       case "weekly-updates":
         return <InternWeeklyUpdatesModule profile={profile} />;
 		case "time-logs": // ✅ NEW
@@ -149,6 +154,16 @@ export default function InternDashboard() {
             >
               <User className="h-5 w-5 flex-shrink-0" />
               {sidebarOpen && "Profile"}
+            </Button>
+
+            <Button
+              variant={currentView === "training" ? "secondary" : "ghost"}
+              className={`w-full justify-start gap-3 ${!sidebarOpen && 'justify-center px-2'}`}
+              onClick={() => setLocation("/intern/training")}
+              data-testid="nav-training"
+            >
+              <BookOpen className="h-5 w-5 flex-shrink-0" />
+              {sidebarOpen && "Training"}
             </Button>
 			
 <Button
