@@ -255,3 +255,59 @@ export const adminLoginSchema = z.object({
 });
 
 export type AdminLoginData = z.infer<typeof adminLoginSchema>;
+
+// Training Module Tables
+export const trainingWeeks = pgTable("training_weeks", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  weekNumber: integer("week_number").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const trainingTopics = pgTable("training_topics", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  weekId: uuid("week_id").notNull().references(() => trainingWeeks.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const trainingSubtopics = pgTable("training_subtopics", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  topicId: uuid("topic_id").notNull().references(() => trainingTopics.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const internTrainingProgress = pgTable("intern_training_progress", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  internId: uuid("intern_id").notNull().references(() => interns.id, { onDelete: "cascade" }),
+  weekId: uuid("week_id").notNull().references(() => trainingWeeks.id, { onDelete: "cascade" }),
+  subtopicId: uuid("subtopic_id").notNull().references(() => trainingSubtopics.id, { onDelete: "cascade" }),
+  isCompleted: boolean("is_completed").default(false),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const internCertificates = pgTable("intern_certificates", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  internId: uuid("intern_id").notNull().references(() => interns.id, { onDelete: "cascade" }).unique(),
+  certificateNumber: text("certificate_number").notNull().unique(),
+  issuedDate: timestamp("issued_date").defaultNow(),
+  certificateUrl: text("certificate_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type TrainingWeek = typeof trainingWeeks.$inferSelect;
+export type InsertTrainingWeek = typeof trainingWeeks.$inferInsert;
+export type TrainingTopic = typeof trainingTopics.$inferSelect;
+export type InsertTrainingTopic = typeof trainingTopics.$inferInsert;
+export type TrainingSubtopic = typeof trainingSubtopics.$inferSelect;
+export type InsertTrainingSubtopic = typeof trainingSubtopics.$inferInsert;
+export type InternTrainingProgress = typeof internTrainingProgress.$inferSelect;
+export type InsertInternTrainingProgress = typeof internTrainingProgress.$inferInsert;
+export type InternCertificate = typeof internCertificates.$inferSelect;
+export type InsertInternCertificate = typeof internCertificates.$inferInsert;
