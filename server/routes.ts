@@ -13,7 +13,7 @@ import fs from "fs";
 import ExcelJS from "exceljs";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { weeklyUpdateSchema, trainingWeeks, trainingTopics, trainingSubtopics, internTrainingProgress, internCertificates } from "../shared/schema";
+import { weeklyUpdateSchema, trainingWeeks, trainingTopics, trainingSubtopics, internTrainingProgress, internCertificates } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray } from "drizzle-orm";
 
